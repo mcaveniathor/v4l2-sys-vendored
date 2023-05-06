@@ -201,7 +201,7 @@ impl Build {
         cc
             .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
             //.define("HAVE_V4L_PLUGINS", None)
-            .files(v2_sources.clone())
+            .files(v1_sources.clone())
             .includes(inc.clone())
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4l");
@@ -211,7 +211,7 @@ impl Build {
         cc
             .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
             //.define("HAVE_V4L_PLUGINS", None)
-            .files(v2_sources.clone())
+            .files(c_sources.clone())
             .includes(inc.clone())
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4lconvert");
@@ -233,9 +233,9 @@ impl Build {
 
 
 
-        println!("cargo:rustc-link-lib=v4lconvert");
-        println!("cargo:rustc-link-lib=v4l1");
-        println!("cargo:rustc-link-lib=v4l2");
+        //println!("cargo:rustc-link-lib=v4lconvert");
+        //println!("cargo:rustc-link-lib=v4l1");
+        //println!("cargo:rustc-link-lib=v4l2");
         //source.push("videodev2.h".into());
         //source.push(inner_dir.join("lib/libv4l1/v4l1compat.c"));
         #[cfg(target_os = "android")]
@@ -246,7 +246,7 @@ impl Build {
         let include_dir = install_dir.join("include");
         let lib_dir = install_dir.join("lib");
         fs::create_dir_all(&include_dir).map_err(|e| anyhow!("Error occurred while creating directory {}: {}", &include_dir.display(), e))?;
-        let headers: Vec<PathBuf> = vec!["v4l-utils/lib/include/libv4l2.h", "v4l-utils/lib/include/libv4lconvert.h", "v4l-utils/lib/include/libv4l-plugin.h", "wrapper_v4l2.h"].iter().map(|h| PathBuf::from(h)).collect();
+        let headers: Vec<PathBuf> = vec!["v4l-utils/lib/include/libv4l2.h", "v4l-utils/lib/include/libv4lconvert.h", "v4l-utils/lib/include/libv4l-plugin.h", "wrapper_v4l2.h", ].iter().map(|h| PathBuf::from(h)).collect();
         let _outfile = create_bindings(&headers, "v4l2_bindings.rs")?;
         fs::remove_dir_all(&inner_dir)?;
         

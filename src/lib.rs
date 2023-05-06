@@ -6,3 +6,4 @@
 // https://github.com/rust-lang/rust-bindgen/issues/1651
 
 include!(concat!(env!("OUT_DIR"), "/v4l2_bindings.rs"));
+//include!(concat!(env!("OUT_DIR"), "/v4l_bindings.rs"));
