@@ -202,7 +202,7 @@ impl Build {
         cc
             .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
             //.define("HAVE_V4L_PLUGINS", None)
-            .files(v1_sources.clone())
+            .files(v2_sources.clone())
             .includes(inc.clone())
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4l");
@@ -212,7 +212,7 @@ impl Build {
         cc
             .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
             //.define("HAVE_V4L_PLUGINS", None)
-            .files(c_sources.clone())
+            .files(v2_sources.clone())
             .includes(inc.clone())
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4lconvert");
