@@ -106,8 +106,8 @@ impl Build {
         let build_dir = out_dir.join("build");
         let install_dir = out_dir.join("install");
         let libs = vec![
-            //"v4l",
-            //"v4lconvert",
+            "v4l",
+            "v4lconvert",
             "v4l2",
         ].iter().map(|l| l.to_string()).collect();
 
