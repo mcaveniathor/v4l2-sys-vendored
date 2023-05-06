@@ -217,12 +217,12 @@ impl Build {
        
 
 
-        fs::remove_dir_all(&inner_dir)?;
         let include_dir = install_dir.join("include");
         let lib_dir = install_dir.join("lib");
         fs::create_dir_all(&include_dir).map_err(|e| anyhow!("Error occurred while creating directory {}: {}", &include_dir.display(), e))?;
-        let headers: Vec<PathBuf> = vec!["v4l-utils/lib/include/libv4l2.h", "v4l-utils/lib/include/libv4l-plugin.h", "wrapper_v4l2.h"].iter().map(|h| PathBuf::from(h)).collect();
+        let headers: Vec<PathBuf> = vec!["v4l-utils/lib/include/libv4l2.h", "v4l-utils/lib/include/libv4lconvert.h", "v4l-utils/lib/include/libv4l-plugin.h", "wrapper_v4l2.h"].iter().map(|h| PathBuf::from(h)).collect();
         let _outfile = create_bindings(&headers, "v4l2_bindings.rs")?;
+        fs::remove_dir_all(&inner_dir)?;
         
         Ok(Artifacts {
             include_dir,
