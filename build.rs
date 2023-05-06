@@ -135,7 +135,7 @@ impl Build {
         v1_sources.push(libpath.join("libv4l1/log.c"));
 
         let mut sources = v1_sources.clone();
-
+        /*
         let mut cc = cc::Build::new();
         cc.target(target).host(host).warnings(false).opt_level(2);
         cc
@@ -146,6 +146,7 @@ impl Build {
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4l");
 
+            */
         let mut c_sources = Vec::new();
         //sources.push(libpath.join("libv4l2/v4l2-plugin.c"));
         c_sources.push(libpath.join("libv4lconvert/bayer.c"));
@@ -178,9 +179,9 @@ impl Build {
         c_sources.push(libpath.join("libv4lconvert/processing/gamma.c"));
         c_sources.push(libpath.join("libv4lconvert/processing/libv4lprocessing.c"));
         c_sources.push(libpath.join("libv4lconvert/processing/whitebalance.c"));
-
-        let mut cc = cc::Build::new();
         sources.extend_from_slice(&c_sources);
+        /*
+        let mut cc = cc::Build::new();
         cc.target(target).host(host).warnings(false).opt_level(2);
         cc
             .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
@@ -189,12 +190,32 @@ impl Build {
             .includes(inc.clone())
             .define("PROMOTED_MODE_T", "mode_t")
             .compile("v4lconvert");
-
+        */
         let mut v2_sources = sources;
         v2_sources.push(libpath.join("libv4l2/log.c"));
         v2_sources.push(libpath.join("libv4l1/v4l1compat.c"));
         v2_sources.push(libpath.join("libv4l-mplane/libv4l-mplane.c"));
         v2_sources.push(libpath.join("libv4l2rds/libv4l2rds.c"));
+        let mut cc = cc::Build::new();
+        cc.target(target).host(host).warnings(false).opt_level(2);
+        cc
+            .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
+            //.define("HAVE_V4L_PLUGINS", None)
+            .files(v2_sources.clone())
+            .includes(inc.clone())
+            .define("PROMOTED_MODE_T", "mode_t")
+            .compile("v4l");
+
+        let mut cc = cc::Build::new();
+        cc.target(target).host(host).warnings(false).opt_level(2);
+        cc
+            .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
+            //.define("HAVE_V4L_PLUGINS", None)
+            .files(v2_sources.clone())
+            .includes(inc.clone())
+            .define("PROMOTED_MODE_T", "mode_t")
+            .compile("v4lconvert");
+
         let mut cc = cc::Build::new();
         cc.target(target).host(host).warnings(false).opt_level(2);
         cc
@@ -207,8 +228,13 @@ impl Build {
 
 
 
-        //println!("cargo:rustc-link-lib=v4lconvert");
-        //println!("cargo:rustc-link-lib=v4l1");
+
+
+
+
+
+        println!("cargo:rustc-link-lib=v4lconvert");
+        println!("cargo:rustc-link-lib=v4l1");
         println!("cargo:rustc-link-lib=v4l2");
         //source.push("videodev2.h".into());
         //source.push(inner_dir.join("lib/libv4l1/v4l1compat.c"));
