@@ -1,12 +1,11 @@
 extern crate cc;
+extern crate bindgen;
 extern crate anyhow;
-#[macro_use] use anyhow::Result;
+use anyhow::*;
 
 use std::env;
-use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 
 pub fn source_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("v4l-utils")
@@ -25,29 +24,31 @@ pub struct Build {
 pub struct Artifacts {
     include_dir: PathBuf,
     lib_dir: PathBuf,
-    bin_dir: PathBuf,
+    _bin_dir: PathBuf,
     libs: Vec<String>,
     target: String,
 }
 
-fn extfiles(dir: impl AsRef<Path>, dirs: bool, extension: &str) -> Result<Vec<PathBuf>> {
+
+/// Recursively collects all subdirectories of `dir` which contain header files with the given extension
+fn _include_dirs(dir: impl AsRef<Path>, extension: &str) -> Result<Vec<PathBuf>> {
     let dir = dir.as_ref();
-    if !(dir.exists() && dir.is_dir()) { anyhow::bail!("{} is not a directory", dir.display()); }
+    if !(dir.exists() && dir.is_dir()) { bail!("{} is not a directory", dir.display())}
     let mut list = Vec::new();
+    let mut added = false;
     for entry in dir.read_dir()? {
         let entry = entry?.path();
-
         if entry.is_dir() {
-            list.append(&mut extfiles(entry, dirs, extension.clone())?);
+            list.append(&mut _include_dirs(entry, extension.clone())?);
         }
         else {
-            if let Some(ext) = entry.extension() {
-                if ext == extension {
-                    if dirs {
-                        list.push(dir.canonicalize()?);
-                    }
-                    else {
-                        list.push(entry.canonicalize()?);
+            if !added {
+                if let Some(ext) = entry.extension() {
+                    if ext == extension {
+                        if !entry.display().to_string().contains("priv") {
+                            list.push(dir.canonicalize()?); // add the directory's path to list
+                            added = true;
+                        }
                     }
                 }
             }
@@ -58,7 +59,150 @@ fn extfiles(dir: impl AsRef<Path>, dirs: bool, extension: &str) -> Result<Vec<Pa
 
 
 
+
+/// Recursively collects the absolute paths to non-directory children of `dir` with the given extension
+fn _extfiles(dir: impl AsRef<Path>, extension: impl AsRef<str>) -> Result<Vec<PathBuf>> {
+    let dir = dir.as_ref();
+    if !(dir.exists() && dir.is_dir()) { bail!("{} is not a directory", dir.display()); }
+    let mut list = Vec::new();
+    for entry in dir.read_dir().map_err(|e| anyhow!("Failed to read contents of directory {}: {}", &dir.display(), e))? {
+        let entry = entry?.path();
+        if entry.is_dir() {
+            list.append(&mut _extfiles(entry, extension.as_ref().clone())?);
+        }
+        else {
+            if let Some(ext) = entry.extension() {
+                if ext == extension.as_ref() {
+                    list.push(entry.canonicalize()?); // add this file's path to list
+                }
+            }
+        }
+    }
+    Ok(list)
+}
+
+// Returns the created path
+fn create_bindings(headers: &[PathBuf], out_name: impl AsRef<str>) -> Result<PathBuf> {
+    let mut builder = bindgen::Builder::default();
+    for header in headers { 
+        builder = builder.header(header.display().to_string());
+    }
+    let bindings = builder
+        .generate()
+        .map_err(|e| anyhow!("Failed to generate bindings: {}", e))?;
+
+    let out_path = PathBuf::from(env::var("OUT_DIR")?).join(out_name.as_ref());
+    bindings
+        .write_to_file(&out_path)
+        .map_err(|e| anyhow!("Failed to write bindings to file {:?}: {}", out_path.canonicalize(), e))?;
+    Ok(out_path)
+}
+
 impl Build {
+        pub fn build(&mut self) -> Result<Artifacts> {
+        let target = &self.target.as_ref().expect("TARGET dir not set")[..];
+        let host = &self.host.as_ref().expect("HOST dir not set")[..];
+        let out_dir = self.out_dir.as_ref().expect("OUT_DIR not set");
+        let build_dir = out_dir.join("build");
+        let install_dir = out_dir.join("install");
+        let libs = vec![
+            "v4l",
+            "v4lconvert",
+            "v4l2",
+        ].iter().map(|l| l.to_string()).collect();
+
+
+        if build_dir.exists() {
+            fs::remove_dir_all(&build_dir).map_err(|e| anyhow!("Error occurred while clearing build directory {}: {}", &build_dir.display(), e))?;
+        }
+        if install_dir.exists() {
+            fs::remove_dir_all(&install_dir).map_err(|e| anyhow!("Error occurred while clearing install directory {}: {}", &install_dir.display(), e))?;
+        }
+
+        let inner_dir = build_dir.join("src");
+        fs::create_dir_all(&inner_dir).map_err(|e| anyhow!("Error occurred while creating directory {}: {}", &inner_dir.display(), e))?;
+        cp_r(&source_dir(), &inner_dir);
+
+        // Common C source files and includesl';
+        let  mut sources = Vec::new();
+        //let mut inc = include_dirs(&inner_dir.join("lib/include"), "h")?;
+        //inc.append(&mut include_dirs(&inner_dir.join("include"), "h")?);
+        let mut inc = vec![inner_dir.join("lib/include")];
+        inc.push(inner_dir.join("include"));
+        let libpath = inner_dir.join("lib");
+        sources.push(libpath.join("libv4l1/libv4l1.c"));
+        sources.push(libpath.join("libv4l1/v4l1compat.c"));
+        sources.push(libpath.join("libv4l2/libv4l2.c"));
+        sources.push(libpath.join("libv4l2/log.c"));
+        sources.push(libpath.join("libv4l-mplane/libv4l-mplane.c"));
+        sources.push(libpath.join("libv4l2rds/libv4l2rds.c"));
+        sources.push(libpath.join("libv4l1/log.c"));
+        //sources.push(libpath.join("libv4l2/v4l2-plugin.c"));
+        sources.push(libpath.join("libv4lconvert/bayer.c"));
+        sources.push(libpath.join("libv4lconvert/cpia1.c"));
+        sources.push(libpath.join("libv4lconvert/crop.c"));
+        sources.push(libpath.join("libv4lconvert/flip.c"));
+        sources.push(libpath.join("libv4lconvert/helper.c"));
+        sources.push(libpath.join("libv4lconvert/jidctflt.c"));
+        sources.push(libpath.join("libv4lconvert/jl2005bcd.c"));
+        sources.push(libpath.join("libv4lconvert/jpeg.c"));
+        sources.push(libpath.join("libv4lconvert/jpeg_memsrcdest.c"));
+        sources.push(libpath.join("libv4lconvert/jpgl.c"));
+        sources.push(libpath.join("libv4lconvert/libv4lconvert.c"));
+        sources.push(libpath.join("libv4lconvert/mr97310a.c"));
+        sources.push(libpath.join("libv4lconvert/nv12_16l16.c"));
+        sources.push(libpath.join("libv4lconvert/ov511-decomp.c"));
+        sources.push(libpath.join("libv4lconvert/ov518-decomp.c"));
+        sources.push(libpath.join("libv4lconvert/pac207.c"));
+        sources.push(libpath.join("libv4lconvert/rgbyuv.c"));
+        sources.push(libpath.join("libv4lconvert/se401.c"));
+        sources.push(libpath.join("libv4lconvert/sn9c10x.c"));
+        sources.push(libpath.join("libv4lconvert/sn9c2028-decomp.c"));
+        sources.push(libpath.join("libv4lconvert/sn9c20x.c"));
+        sources.push(libpath.join("libv4lconvert/spca501.c"));
+        sources.push(libpath.join("libv4lconvert/spca561-decompress.c"));
+        sources.push(libpath.join("libv4lconvert/sq905c.c"));
+        sources.push(libpath.join("libv4lconvert/stv0680.c"));
+        sources.push(libpath.join("libv4lconvert/tinyjpeg.c"));
+        sources.push(libpath.join("libv4lconvert/processing/autogain.c"));
+        sources.push(libpath.join("libv4lconvert/processing/gamma.c"));
+        sources.push(libpath.join("libv4lconvert/processing/libv4lprocessing.c"));
+        sources.push(libpath.join("libv4lconvert/processing/whitebalance.c"));
+        println!("cargo:rustc-link-lib=v4lconvert");
+        println!("cargo:rustc-link-lib=v4l1");
+        println!("cargo:rustc-link-lib=v4l2");
+        let mut cc = cc::Build::new();
+        cc.target(target).host(host).warnings(false).opt_level(2);
+        //source.push("videodev2.h".into());
+        //source.push(inner_dir.join("lib/libv4l1/v4l1compat.c"));
+        #[cfg(target_os = "android")]
+        source.push(&inner_dir.join("lib/libv4l2/v4l2-plugin-android.c"))?;
+       cc
+            .define("V4L2_PIX_FMT_NV12_16L16", "v4l2_fourcc('H', 'M', '1', '2')")
+            //.define("HAVE_V4L_PLUGINS", None)
+            .files(sources)
+            .includes(inc)
+            .define("PROMOTED_MODE_T", "mode_t")
+            .compile("v4l2");
+
+
+        fs::remove_dir_all(&inner_dir)?;
+        let include_dir = install_dir.join("include");
+        let lib_dir = install_dir.join("lib");
+        fs::create_dir_all(&include_dir).map_err(|e| anyhow!("Error occurred while creating directory {}: {}", &include_dir.display(), e))?;
+        let headers: Vec<PathBuf> = vec!["v4l-utils/lib/include/libv4l2.h", "v4l-utils/lib/include/libv4l-plugin.h", "wrapper_v4l2.h"].iter().map(|h| PathBuf::from(h)).collect();
+        let _outfile = create_bindings(&headers, "v4l2_bindings.rs")?;
+        
+        Ok(Artifacts {
+            include_dir,
+            lib_dir,
+            _bin_dir: install_dir.join("bin"),
+            libs,
+            target: target.to_string(),
+        })
+    }
+
+
     pub fn new() -> Build {
         Build {
             out_dir: env::var_os("OUT_DIR").map(|s| PathBuf::from(s).join("v4l2-build")),
@@ -81,98 +225,13 @@ impl Build {
         self.host = Some(host.to_string());
         self
     }
-
-    fn cmd_make(&self) -> Command {
-        let host = &self.host.as_ref().expect("HOST dir not set")[..];
-        if host.contains("dragonfly")
-            || host.contains("freebsd")
-            || host.contains("openbsd")
-            || host.contains("solaris")
-            || host.contains("illumos")
-        {
-            Command::new("gmake")
-        } else {
-            Command::new("make")
-        }
-    }
-
-
-    pub fn build(&mut self) -> Artifacts {
-        let target = &self.target.as_ref().expect("TARGET dir not set")[..];
-        let host = &self.host.as_ref().expect("HOST dir not set")[..];
-        let out_dir = self.out_dir.as_ref().expect("OUT_DIR not set");
-        let build_dir = out_dir.join("build");
-        let install_dir = out_dir.join("install");
-        let libs = vec!["v4l2".into()];
-        if build_dir.exists() {
-            fs::remove_dir_all(&build_dir).unwrap();
-        }
-        if install_dir.exists() {
-            fs::remove_dir_all(&install_dir).unwrap();
-        }
-
-        let inner_dir = build_dir.join("src");
-        fs::create_dir_all(&inner_dir).unwrap();
-        cp_r(&source_dir(), &inner_dir);
-
-        let mut cc = cc::Build::new();
-        cc.target(target).host(host).warnings(false).opt_level(2);
-
-
-        //let mut source = extfiles(&inner_dir.join("lib/libv4l2"), false, "c").unwrap();
-        let mut source = Vec::new();
-        //source.push(inner_dir.join("lib/libv4l2/v4l2-plugin.c"));
-        source.push(inner_dir.join("lib/libv4l2/libv4l2.c"));
-        source.push(inner_dir.join("lib/libv4l2/log.c"));
-        let mut inc = extfiles(&inner_dir.join("lib/include"), true, "h").unwrap();
-        //inc.append(&mut extfiles(&inner_dir.join("include"), true, "h").unwrap());
-        inc.push("src".into());
- 
-        #[cfg(target_os = "android")]
-        {
-            source.push(&inner_dir.join("lib/libv4l2/v4l2-plugin-android.c"));
-        }
-
-       cc
-            .files(source)
-            .define("PROMOTED_MODE_T", "mode_t")
-            .includes(inc)
-            .compile("v4l2");
-        fs::remove_dir_all(&inner_dir).unwrap();
-
-        Artifacts {
-            lib_dir: install_dir.join("lib"),
-            bin_dir: install_dir.join("bin"),
-            include_dir: install_dir.join("include"),
-            libs: libs,
-            target: target.to_string(),
-        }
-    }
-
-    fn run_command(&self, mut command: Command, desc: &str) {
-        println!("running {:?}", command);
-        let status = command.status();
-
-        let (status_or_failed, error) = match status {
-            Ok(status) if status.success() => return,
-            Ok(status) => ("Exit status", format!("{}", status)),
-            Err(failed) => ("Failed to execute", format!("{}", failed)),
-        };
-        panic!(
-            "
-Error {}:
-    Command: {:?}
-    {}: {}
-    ",
-            desc, command, status_or_failed, error
-        );
-    }
 }
 
-fn main() {
-    let artifacts = Build::new().build();
 
 
+fn main() -> Result<()> {
+    let _artifacts = Build::new().build()?;
+    Ok(())
 }
 
 
@@ -200,7 +259,7 @@ fn cp_r(src: &Path, dst: &Path) {
     }
 }
 
-fn sanitize_sh(path: &Path) -> String {
+fn _sanitize_sh(path: &Path) -> String {
     if !cfg!(windows) {
         return path.to_str().unwrap().to_string();
     }
