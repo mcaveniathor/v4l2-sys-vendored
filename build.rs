@@ -149,6 +149,7 @@ impl Build {
             */
         let mut c_sources = Vec::new();
         //sources.push(libpath.join("libv4l2/v4l2-plugin.c"));
+        c_sources.push(libpath.join("libv4lconvert/libv4lconvert.c"));
         c_sources.push(libpath.join("libv4lconvert/bayer.c"));
         c_sources.push(libpath.join("libv4lconvert/cpia1.c"));
         c_sources.push(libpath.join("libv4lconvert/crop.c"));
