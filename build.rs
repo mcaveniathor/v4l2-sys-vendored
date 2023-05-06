@@ -106,8 +106,8 @@ impl Build {
         let build_dir = out_dir.join("build");
         let install_dir = out_dir.join("install");
         let libs = vec![
-            "v4l",
-            "v4lconvert",
+            //"v4l",
+            //"v4lconvert",
             "v4l2",
         ].iter().map(|l| l.to_string()).collect();
 
@@ -207,8 +207,8 @@ impl Build {
 
 
 
-        println!("cargo:rustc-link-lib=v4lconvert");
-        println!("cargo:rustc-link-lib=v4l1");
+        //println!("cargo:rustc-link-lib=v4lconvert");
+        //println!("cargo:rustc-link-lib=v4l1");
         println!("cargo:rustc-link-lib=v4l2");
         //source.push("videodev2.h".into());
         //source.push(inner_dir.join("lib/libv4l1/v4l1compat.c"));
